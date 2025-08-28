@@ -1,0 +1,216 @@
+# 🚀 FinanceGPT Live - Docker Compose Configuration
+# =================================================
+# 
+# Complete containerized environment for development and production
+# Built for IIT Hackathon 2025 🏆
+
+version: '3.8'
+
+services:
+  # 🔥 FinanceGPT Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: financegpt-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://financegpt:password@postgres:5432/financegpt
+      - REDIS_URL=redis://redis:6379
+      - PATHWAY_PERSISTENCE_DIR=/app/pathway_data
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+      - pathway_data:/app/pathway_data
+      - market_data:/app/data
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - financegpt-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 📱 Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: financegpt-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - financegpt-network
+
+  # 🗄️ PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: financegpt-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: financegpt
+      POSTGRES_USER: financegpt
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - financegpt-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financegpt -d financegpt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 📦 Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: financegpt-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass redispassword
+    volumes:
+      - redis_data:/data
+    networks:
+      - financegpt-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 📊 Data Collection Service
+  data-collector:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.data-collector
+    container_name: financegpt-data-collector
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://financegpt:password@postgres:5432/financegpt
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
+    volumes:
+      - market_data:/app/data
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - financegpt-network
+
+  # 🔍 Monitoring & Analytics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: financegpt-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - financegpt-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: financegpt-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - financegpt-network
+
+  # 🌐 Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: financegpt-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - financegpt-network
+
+# 📁 Named Volumes
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pathway_data:
+    driver: local
+  market_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# 🌐 Networks
+networks:
+  financegpt-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# 🧪 Development Override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+x-development:
+  backend-dev: &backend-dev
+    build:
+      target: development
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    environment:
+      - RELOAD=true
+      - DEBUG=true
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend-dev: &frontend-dev
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true

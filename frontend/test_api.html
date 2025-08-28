@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #45a049; }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            background: #333;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🤖 AI Agent API Test</h1>
+    <p>Testing AI agent endpoints to debug auto-polling issue.</p>
+    
+    <button onclick="testMarketSentinel()">Test Market Sentinel</button>
+    <button onclick="testNewsIntelligence()">Test News Intelligence</button>
+    <button onclick="testAllAgents()">Test All Agents</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const resultsDiv = document.getElementById('results');
+
+        function logResult(message) {
+            console.log(message);
+            resultsDiv.innerHTML += '<div class="result">' + message + '</div>';
+        }
+
+        async function testMarketSentinel() {
+            logResult('🔄 Testing Market Sentinel...');
+            try {
+                const response = await fetch('http://127.0.0.1:8001/api/agents/market-sentinel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbols: ['AAPL', 'MSFT', 'GOOGL'] })
+                });
+                
+                logResult('📊 Response Status: ' + response.status);
+                
+                const result = await response.json();
+                logResult('📊 Response Data: ' + JSON.stringify(result, null, 2));
+                
+                if (result.success) {
+                    logResult('✅ Market Sentinel SUCCESS: ' + result.data.analysis.length + ' items');
+                } else {
+                    logResult('❌ Market Sentinel FAILED: success=false');
+                }
+            } catch (error) {
+                logResult('❌ Market Sentinel ERROR: ' + error.message);
+            }
+        }
+
+        async function testNewsIntelligence() {
+            logResult('🔄 Testing News Intelligence...');
+            try {
+                const response = await fetch('http://127.0.0.1:8001/api/agents/news-intelligence', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbols: ['AAPL', 'MSFT', 'GOOGL'] })
+                });
+                
+                logResult('📰 Response Status: ' + response.status);
+                
+                const result = await response.json();
+                logResult('📰 Response Data: ' + JSON.stringify(result, null, 2));
+                
+                if (result.success) {
+                    logResult('✅ News Intelligence SUCCESS');
+                } else {
+                    logResult('❌ News Intelligence FAILED: success=false');
+                }
+            } catch (error) {
+                logResult('❌ News Intelligence ERROR: ' + error.message);
+            }
+        }
+
+        async function testAllAgents() {
+            logResult('🤖 Testing ALL AI Agents...');
+            const agents = [
+                { name: 'Market Sentinel', endpoint: 'market-sentinel', method: 'POST', body: { symbols: ['AAPL', 'MSFT', 'GOOGL'] } },
+                { name: 'News Intelligence', endpoint: 'news-intelligence', method: 'POST', body: { symbols: ['AAPL', 'MSFT', 'GOOGL'] } },
+                { name: 'Risk Assessor', endpoint: 'risk-assessor', method: 'POST', body: { portfolio: [{ symbol: 'AAPL', price: 230 }] } },
+                { name: 'Signal Generator', endpoint: 'signal-generator', method: 'POST', body: { symbols: ['AAPL', 'MSFT', 'GOOGL'] } },
+                { name: 'Compliance Guardian', endpoint: 'compliance-guardian', method: 'GET', body: null },
+                { name: 'Executive Summary', endpoint: 'executive-summary', method: 'POST', body: { marketData: [], analysisData: { sentiment: 70, risk: 50, signals: 2 } } }
+            ];
+
+            for (const agent of agents) {
+                try {
+                    logResult(`🔄 Testing ${agent.name}...`);
+                    
+                    const options = {
+                        method: agent.method,
+                        headers: { 'Content-Type': 'application/json' }
+                    };
+                    
+                    if (agent.body) {
+                        options.body = JSON.stringify(agent.body);
+                    }
+                    
+                    const response = await fetch(`http://127.0.0.1:8001/api/agents/${agent.endpoint}`, options);
+                    logResult(`${agent.name} Status: ${response.status}`);
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        logResult(`✅ ${agent.name} SUCCESS`);
+                    } else {
+                        logResult(`❌ ${agent.name} FAILED`);
+                    }
+                } catch (error) {
+                    logResult(`❌ ${agent.name} ERROR: ${error.message}`);
+                }
+            }
+        }
+
+        // Auto-run test on page load
+        window.onload = function() {
+            logResult('🚀 Page loaded - Starting automatic test...');
+            setTimeout(testMarketSentinel, 1000);
+        };
+    </script>
+</body>
+</html>

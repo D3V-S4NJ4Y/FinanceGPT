@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinanceGPT Live - Quick Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #0f0f23; color: #e0e0e0; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .test-section { background: #1a1a2e; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .status { display: inline-block; padding: 5px 10px; border-radius: 5px; }
+        .success { background: #16a34a; color: white; }
+        .error { background: #dc2626; color: white; }
+        .loading { background: #f59e0b; color: white; }
+        .market-data { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
+        .stock-card { background: #16213e; padding: 15px; border-radius: 8px; text-align: center; }
+        .price { font-size: 1.5em; font-weight: bold; margin: 10px 0; }
+        .positive { color: #10b981; }
+        .negative { color: #ef4444; }
+        .ws-status { margin-top: 20px; padding: 15px; background: #1e293b; border-radius: 8px; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; background: #3b82f6; color: white; cursor: pointer; }
+        button:hover { background: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 FinanceGPT Live - System Test</h1>
+            <h2>Hackathon Demo - IIT 2025</h2>
+        </div>
+
+        <div class="test-section">
+            <h3>🔌 Backend API Status</h3>
+            <p>Backend Server: <span id="backend-status" class="status loading">Testing...</span></p>
+            <p>API Health: <span id="health-status" class="status loading">Testing...</span></p>
+            <p>AI Agents: <span id="agents-status" class="status loading">Testing...</span></p>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Live Market Data Test</h3>
+            <button onclick="fetchMarketData()">Fetch Live Data</button>
+            <div id="market-data" class="market-data"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🤖 AI Analysis Test</h3>
+            <button onclick="testMarketAnalysis()">Test Market Analysis</button>
+            <button onclick="testNewsAnalysis()">Test News Analysis</button>
+            <div id="analysis-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📡 WebSocket Real-time Feed</h3>
+            <button onclick="connectWebSocket()">Connect WebSocket</button>
+            <button onclick="disconnectWebSocket()">Disconnect</button>
+            <div id="ws-status" class="ws-status">
+                <p>Status: <span id="ws-connection">Not Connected</span></p>
+                <p>Messages Received: <span id="ws-messages">0</span></p>
+                <div id="ws-data"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let messageCount = 0;
+
+        // Test backend connectivity
+        async function testBackend() {
+            try {
+                const response = await fetch('http://localhost:8000/');
+                if (response.ok) {
+                    document.getElementById('backend-status').className = 'status success';
+                    document.getElementById('backend-status').textContent = '✅ Online';
+                } else {
+                    throw new Error('Backend not responding');
+                }
+            } catch (error) {
+                document.getElementById('backend-status').className = 'status error';
+                document.getElementById('backend-status').textContent = '❌ Offline';
+                console.error('Backend test failed:', error);
+            }
+        }
+
+        // Test health endpoint
+        async function testHealth() {
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const data = await response.json();
+                if (response.ok && data.status === 'healthy') {
+                    document.getElementById('health-status').className = 'status success';
+                    document.getElementById('health-status').textContent = '✅ Healthy';
+                    
+                    // Update agents status
+                    const agentsCount = Object.keys(data.services).length;
+                    document.getElementById('agents-status').className = 'status success';
+                    document.getElementById('agents-status').textContent = `✅ ${agentsCount} Services Active`;
+                } else {
+                    throw new Error('Health check failed');
+                }
+            } catch (error) {
+                document.getElementById('health-status').className = 'status error';
+                document.getElementById('health-status').textContent = '❌ Unhealthy';
+                document.getElementById('agents-status').className = 'status error';
+                document.getElementById('agents-status').textContent = '❌ Services Down';
+                console.error('Health test failed:', error);
+            }
+        }
+
+        // Fetch market data
+        async function fetchMarketData() {
+            try {
+                const response = await fetch('http://localhost:8000/api/market-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        symbols: ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'],
+                        timeframe: '1d'
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    displayMarketData(result.data);
+                } else {
+                    throw new Error('Market data fetch failed');
+                }
+            } catch (error) {
+                document.getElementById('market-data').innerHTML = '<p style="color: red;">❌ Market data fetch failed</p>';
+                console.error('Market data error:', error);
+            }
+        }
+
+        function displayMarketData(data) {
+            const container = document.getElementById('market-data');
+            container.innerHTML = '';
+            
+            Object.entries(data).forEach(([symbol, info]) => {
+                const changeClass = info.change_percent >= 0 ? 'positive' : 'negative';
+                const changeSign = info.change_percent >= 0 ? '+' : '';
+                
+                container.innerHTML += `
+                    <div class="stock-card">
+                        <h4>${symbol}</h4>
+                        <div class="price ${changeClass}">$${info.current_price.toFixed(2)}</div>
+                        <div class="${changeClass}">${changeSign}${info.change_percent.toFixed(2)}%</div>
+                        <small>Vol: ${info.volume.toLocaleString()}</small>
+                    </div>
+                `;
+            });
+        }
+
+        // Test AI analysis
+        async function testMarketAnalysis() {
+            try {
+                const response = await fetch('http://localhost:8000/api/ai-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: 'AAPL,MSFT,GOOGL',
+                        agent_type: 'market_sentinel'
+                    })
+                });
+                
+                const result = await response.json();
+                displayAnalysisResult(result);
+            } catch (error) {
+                console.error('Market analysis error:', error);
+            }
+        }
+
+        async function testNewsAnalysis() {
+            try {
+                const response = await fetch('http://localhost:8000/api/ai-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: 'tech stocks earnings',
+                        agent_type: 'news_intelligence'
+                    })
+                });
+                
+                const result = await response.json();
+                displayAnalysisResult(result);
+            } catch (error) {
+                console.error('News analysis error:', error);
+            }
+        }
+
+        function displayAnalysisResult(result) {
+            const container = document.getElementById('analysis-result');
+            container.innerHTML = `
+                <div style="background: #1e293b; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <h4>🤖 AI Analysis Result</h4>
+                    <p><strong>Agent:</strong> ${result.agent}</p>
+                    <p><strong>Query:</strong> ${result.query}</p>
+                    <p><strong>Processing Time:</strong> ${result.processing_time_ms}ms</p>
+                    <pre style="background: #0f172a; padding: 10px; border-radius: 5px; overflow-x: auto;">
+                        ${JSON.stringify(result.analysis, null, 2)}
+                    </pre>
+                </div>
+            `;
+        }
+
+        // WebSocket connection
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('WebSocket already connected');
+                return;
+            }
+
+            ws = new WebSocket('ws://localhost:8000/ws/market-feed');
+            
+            ws.onopen = () => {
+                document.getElementById('ws-connection').textContent = '✅ Connected';
+                document.getElementById('ws-connection').style.color = '#10b981';
+                console.log('WebSocket connected');
+            };
+            
+            ws.onmessage = (event) => {
+                messageCount++;
+                document.getElementById('ws-messages').textContent = messageCount;
+                
+                const data = JSON.parse(event.data);
+                const container = document.getElementById('ws-data');
+                
+                if (data.type === 'market_update') {
+                    displayRealtimeData(data);
+                } else {
+                    container.innerHTML += `<p><strong>${new Date().toLocaleTimeString()}:</strong> ${data.type}</p>`;
+                }
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('ws-connection').textContent = '❌ Disconnected';
+                document.getElementById('ws-connection').style.color = '#ef4444';
+                console.log('WebSocket disconnected');
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('ws-connection').textContent = '❌ Error';
+                document.getElementById('ws-connection').style.color = '#ef4444';
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function displayRealtimeData(message) {
+            const container = document.getElementById('ws-data');
+            const timestamp = new Date(message.timestamp).toLocaleTimeString();
+            
+            let dataHtml = `<div style="border-left: 3px solid #3b82f6; padding-left: 10px; margin: 10px 0;">
+                <p><strong>${timestamp} - Live Market Update:</strong></p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">`;
+            
+            Object.entries(message.data).forEach(([symbol, info]) => {
+                const changeClass = info.change >= 0 ? 'positive' : 'negative';
+                const changeSign = info.change >= 0 ? '+' : '';
+                
+                dataHtml += `
+                    <div style="background: #16213e; padding: 8px; border-radius: 5px; text-align: center;">
+                        <strong>${symbol}</strong><br>
+                        $${info.price}<br>
+                        <span class="${changeClass}">${changeSign}${info.change}%</span>
+                    </div>
+                `;
+            });
+            
+            dataHtml += '</div></div>';
+            container.innerHTML = dataHtml;
+        }
+
+        // Initialize tests on page load
+        window.onload = () => {
+            testBackend();
+            testHealth();
+        };
+    </script>
+</body>
+</html>
